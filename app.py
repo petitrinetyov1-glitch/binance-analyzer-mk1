@@ -5,7 +5,7 @@ from datetime import datetime
 
 st.set_page_config(page_title="Crypto USDT-M Futures Analyzer", layout="wide")
 st.title("Crypto USDT-M Futures Multi-Timeframe Analyzer")
-st.caption("Data publik Futures (Bybit) • Lengkap dengan semua indikator dan timeframe default")
+st.caption("Data publik Futures (OKX) • Lengkap dengan semua indikator dan timeframe default")
 
 TF = {
     "M1": "1m", "M5": "5m", "M15": "15m", "M30": "30m", 
@@ -19,9 +19,9 @@ IND = ["RSI", "MACD", "Volume", "OBV", "PVO", "MFI", "CMF", "CCI",
 
 @st.cache_resource
 def exchange():
-    # MENGGUNAKAN BYBIT agar tidak terblokir geo-location (Indonesia/Cloud Server)
+    # MENGGUNAKAN OKX karena lebih ramah terhadap IP Cloud Server untuk data publik
     # Opsi "defaultType": "swap" memastikan kita mengambil data Futures Perpetual
-    return ccxt.bybit({
+    return ccxt.okx({
         "enableRateLimit": True, 
         "timeout": 20000,
         "options": {"defaultType": "swap"}
@@ -99,120 +99,3 @@ def calculate(df, chosen):
         pdi = 100 * pdm.ewm(alpha=1/14, adjust=False, min_periods=14).mean() / atr.replace(0, float("nan"))
         mdi = 100 * mdm.ewm(alpha=1/14, adjust=False, min_periods=14).mean() / atr.replace(0, float("nan"))
         dx = 100 * (pdi-mdi).abs() / (pdi+mdi).replace(0, float("nan"))
-        df["ADX"] = dx.ewm(alpha=1/14, adjust=False, min_periods=14).mean()
-    if "Bollinger Bands" in chosen:
-        mid, sd = c.rolling(20).mean(), c.rolling(20).std()
-        df["BB Upper"], df["BB Middle"], df["BB Lower"] = mid+2*sd, mid, mid-2*sd
-    if "ATR" in chosen:
-        prev = c.shift(1)
-        tr = pd.concat([h-l, (h-prev).abs(), (l-prev).abs()], axis=1).max(axis=1)
-        df["ATR"] = tr.ewm(alpha=1/14, adjust=False, min_periods=14).mean()
-    if "ROC" in chosen:
-        df["ROC %"] = c.pct_change(10) * 100
-    return df
-
-with st.sidebar:
-    st.header("Pengaturan")
-    try:
-        all_symbols = symbols_list()
-    except Exception as e:
-        st.error("Gagal memuat daftar Futures.")
-        st.code(str(e))
-        st.stop()
-        
-    query = st.text_input("Cari pair", placeholder="BTC, ETH, SOL...")
-    options = [s for s in all_symbols if query.upper() in s.upper()] if query else all_symbols
-    
-    default_index = 0
-    if "BTC/USDT:USDT" in options:
-        default_index = options.index("BTC/USDT:USDT")
-    
-    selected = st.selectbox("Pilih kontrak USDT-M Futures", options, index=default_index if options else 0)
-    timeframes = st.multiselect("Timeframe", list(TF), default=["M1", "M5", "M15", "M30", "H1", "H2", "H4", "D1"])
-    chosen = st.multiselect("Indikator", IND, default=IND)
-    candle_count = st.selectbox("Jumlah candle", [100, 150, 200, 300, 500], index=0)
-    closed_only = st.checkbox("Gunakan candle yang sudah tutup", value=True)
-
-st.info("Pilih pair di panel kiri. Semua timeframe dan indikator sudah otomatis terpilih untuk analisis penuh.")
-
-if st.button("Analisis / Refresh", type="primary"):
-    if not selected or not timeframes:
-        st.warning("Pilih pair dan minimal satu timeframe.")
-    else:
-        ex = exchange()
-        results, errors = [], []
-        symbols_to_process = [selected]
-        total = len(symbols_to_process) * len(timeframes)
-        bar, status = st.progress(0), st.empty()
-        count = 0
-        
-        for symbol in symbols_to_process:
-            for label in timeframes:
-                count += 1
-                status.text(f"Mengambil {symbol} {label} ({count}/{total})")
-                try:
-                    candles = ex.fetch_ohlcv(symbol, timeframe=TF[label], limit=candle_count)
-                    df = pd.DataFrame(candles, columns=["timestamp", "open", "high", "low", "close", "volume"])
-                    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
-                    
-                    if closed_only:
-                        duration = ex.parse_timeframe(TF[label]) * 1000
-                        now = ex.milliseconds()
-                        df = df[(df["timestamp"].astype("int64") // 1_000_000 + duration) <= now].copy()
-                        
-                    if df.empty:
-                        continue
-                        
-                    df = calculate(df, chosen)
-                    last = df.iloc[-1]
-                    prev = df.iloc[-2] if len(df) > 1 else last
-                    
-                    row = {
-                        "Pair": symbol, "Timeframe": label,
-                        "Candle UTC": last["timestamp"].strftime("%Y-%m-%d %H:%M"),
-                        "Close": last["close"],
-                        "Change candle %": (last["close"] / prev["close"] - 1) * 100 if prev["close"] else None,
-                        "Volume": last["volume"],
-                    }
-                    
-                    for col in df.columns:
-                        if col not in ["timestamp", "open", "high", "low", "close", "volume"]:
-                            row[col] = last[col]
-                            
-                    results.append(row)
-                except Exception as e:
-                    errors.append(f"{symbol} {label}: {str(e)[:180]}")
-                bar.progress(count / total)
-                
-        bar.empty()
-        status.empty()
-        st.session_state["results"] = results
-        st.session_state["errors"] = errors
-        st.session_state["updated"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        st.session_state["selected_pair"] = selected
-
-if "results" in st.session_state:
-    rows = st.session_state["results"]
-    st.caption(f"Update terakhir: {st.session_state['updated']}")
-    if rows:
-        result = pd.DataFrame(rows)
-        st.dataframe(result, use_container_width=True, hide_index=True)
-        
-        pair_name = st.session_state.get("selected_pair", "crypto").replace("/", "").replace(":", "_")
-        download_time = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{pair_name}_{download_time}_full.csv"
-        
-        st.download_button(
-            "Download CSV", 
-            result.to_csv(index=False).encode("utf-8-sig"),
-            filename, 
-            "text/csv"
-        )
-    else:
-        st.warning("Tidak ada data yang berhasil dianalisis.")
-        
-    if st.session_state.get("errors"):
-        with st.expander(f"Detail error ({len(st.session_state['errors'])})"):
-            st.code("\n".join(st.session_state["errors"][:50]))
-
-st.caption("Data publik USDT-M perpetual Futures. Semua indikator aktif secara default.")
