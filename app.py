@@ -8,16 +8,9 @@ st.title("Binance USDT-M Futures Multi-Timeframe Analyzer (Full Version)")
 st.caption("Data publik Binance Futures • Lengkap dengan semua indikator dan timeframe default")
 
 TF = {
-    "M1": "1m", 
-    "M5": "5m", 
-    "M15": "15m", 
-    "M30": "30m", 
-    "H1": "1h", 
-    "H2": "2h", 
-    "H4": "4h", 
-    "H12": "12h", 
-    "D1": "1d",
-    "W1": "1w"
+    "M1": "1m", "M5": "5m", "M15": "15m", "M30": "30m", 
+    "H1": "1h", "H2": "2h", "H4": "4h", "H12": "12h", 
+    "D1": "1d", "W1": "1w"
 }
 
 IND = ["RSI", "MACD", "Volume", "OBV", "PVO", "MFI", "CMF", "CCI",
@@ -49,8 +42,7 @@ def rsi(s, n=14):
 
 def calculate(df, chosen):
     c, h, l, v = df.close, df.high, df.low, df.volume
-    if "RSI" in chosen:
-        df["RSI"] = rsi(c)
+    if "RSI" in chosen: df["RSI"] = rsi(c)
     if "MACD" in chosen:
         line = ema(c, 12) - ema(c, 26)
         sig = ema(line, 9)
@@ -127,20 +119,12 @@ with st.sidebar:
     
     default_index = 0
     if "BTC/USDT:USDT" in options:
-        default_index = options.index("AKE/USDT:USDT")
+        default_index = options.index("BTC/USDT:USDT")
     
     selected = st.selectbox("Pilih kontrak USDT-M Futures", options, index=default_index if options else 0)
-    
-    # DEFAULT: SEMUA TIMEFRAME
     timeframes = st.multiselect("Timeframe", list(TF), default=["M1", "M5", "M15", "M30", "H1", "H2", "H4", "D1"])
-    
-    # DEFAULT: SEMUA INDIKATOR DICENTANG
     chosen = st.multiselect("Indikator", IND, default=IND)
-    
-    # DEFAULT: JUMLAH CANDLE 100
     candle_count = st.selectbox("Jumlah candle", [100, 150, 200, 300, 500], index=0)
-    
-    # DEFAULT: CLOSED_ONLY FALSE
     closed_only = st.checkbox("Gunakan candle yang sudah tutup", value=True)
 
 st.info("Pilih pair di panel kiri. Semua timeframe dan indikator sudah otomatis terpilih untuk analisis penuh.")
