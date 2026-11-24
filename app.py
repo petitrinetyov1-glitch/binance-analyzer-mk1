@@ -3,9 +3,9 @@ import pandas as pd
 import streamlit as st
 from datetime import datetime
 
-st.set_page_config(page_title="Binance USDT-M Futures Analyzer (Full)", layout="wide")
-st.title("Binance USDT-M Futures Multi-Timeframe Analyzer (Full Version)")
-st.caption("Data publik Binance Futures • Lengkap dengan semua indikator dan timeframe default")
+st.set_page_config(page_title="Crypto USDT-M Futures Analyzer", layout="wide")
+st.title("Crypto USDT-M Futures Multi-Timeframe Analyzer")
+st.caption("Data publik Futures (Bybit) • Lengkap dengan semua indikator dan timeframe default")
 
 TF = {
     "M1": "1m", "M5": "5m", "M15": "15m", "M30": "30m", 
@@ -19,7 +19,13 @@ IND = ["RSI", "MACD", "Volume", "OBV", "PVO", "MFI", "CMF", "CCI",
 
 @st.cache_resource
 def exchange():
-    return ccxt.binanceusdm({"enableRateLimit": True, "timeout": 20000})
+    # MENGGUNAKAN BYBIT agar tidak terblokir geo-location (Indonesia/Cloud Server)
+    # Opsi "defaultType": "swap" memastikan kita mengambil data Futures Perpetual
+    return ccxt.bybit({
+        "enableRateLimit": True, 
+        "timeout": 20000,
+        "options": {"defaultType": "swap"}
+    })
 
 @st.cache_data(ttl=300)
 def symbols_list():
@@ -110,7 +116,7 @@ with st.sidebar:
     try:
         all_symbols = symbols_list()
     except Exception as e:
-        st.error("Gagal memuat daftar Futures Binance.")
+        st.error("Gagal memuat daftar Futures.")
         st.code(str(e))
         st.stop()
         
@@ -209,4 +215,4 @@ if "results" in st.session_state:
         with st.expander(f"Detail error ({len(st.session_state['errors'])})"):
             st.code("\n".join(st.session_state["errors"][:50]))
 
-st.caption("USDT-M perpetual Futures. Semua indikator aktif secara default.")
+st.caption("Data publik USDT-M perpetual Futures. Semua indikator aktif secara default.")
